@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink-950: #0d1117;
+  --ink-900: #161b22;
+  --ink-800: #21262d;
+  --ink-700: #30363d;
+  --ink-600: #484f58;
+  --accent: #2f81f7;
+  --accent-soft: rgba(47, 129, 247, 0.16);
+  --success-soft: rgba(63, 185, 80, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: #c9d1d9;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  background:
+    radial-gradient(900px 600px at 20% -10%, var(--accent-soft), transparent 60%),
+    radial-gradient(800px 700px at 90% 110%, var(--success-soft), transparent 55%),
+    var(--ink-950);
+  color-scheme: dark;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-lg border border-ink-700/90 bg-ink-900/95;
+    box-shadow: 0 0 0 1px rgba(48, 54, 61, 0.8);
+  }
+
+  .panel-hover {
+    @apply transition duration-200 hover:border-ink-600;
+  }
+
+  .panel-hover:hover {
+    box-shadow: 0 8px 24px rgba(1, 4, 9, 0.6);
+  }
+
+  .chip {
+    @apply inline-flex items-center rounded-full border border-ink-700/80 bg-ink-800 px-2.5 py-0.5 text-[11px] font-medium text-mist capitalize;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accentStrong;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-md border border-ink-700 bg-ink-800 px-4 py-2 text-sm font-medium text-snow transition hover:border-ink-600;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded-md border border-danger/60 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/20;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-snow placeholder:text-mist/70 focus:border-accent focus:outline-none;
+  }
+}
+
+@keyframes fadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 0.6s ease both;
+}
