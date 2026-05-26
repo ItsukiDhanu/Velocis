@@ -128,3 +128,18 @@
 Notes
 - The migration file repeats the file-storage schema from schema.sql.
 - This list is organized by feature/purpose, with the actual query text shown under each item.
+
+9) Triggers (added by server/sql/migrations/002_triggers.sql)
+- Add `commit_count` column to `repositories` and backfill counts.
+  ALTER TABLE repositories ADD COLUMN commit_count INT DEFAULT 0;
+  UPDATE repositories r SET commit_count = (SELECT COUNT(*) FROM commits c WHERE c.repo_id = r.id);
+- Maintain `commit_count` on commit insert/delete.
+  CREATE TRIGGER increment_repo_commit_count AFTER INSERT ON commits FOR EACH ROW BEGIN UPDATE repositories SET commit_count = commit_count + 1 WHERE id = NEW.repo_id; END;
+  CREATE TRIGGER decrement_repo_commit_count AFTER DELETE ON commits FOR EACH ROW BEGIN UPDATE repositories SET commit_count = GREATEST(0, IFNULL(commit_count,0) - 1) WHERE id = OLD.repo_id; END;
+- Enforce only one default branch per repository.
+  CREATE TRIGGER branches_only_one_default_after_insert AFTER INSERT ON branches FOR EACH ROW BEGIN IF NEW.is_default = 1 THEN UPDATE branches SET is_default = 0 WHERE repo_id = NEW.repo_id AND id <> NEW.id; END IF; END;
+  CREATE TRIGGER branches_only_one_default_after_update AFTER UPDATE ON branches FOR EACH ROW BEGIN IF NEW.is_default = 1 THEN UPDATE branches SET is_default = 0 WHERE repo_id = NEW.repo_id AND id <> NEW.id; END IF; END;
+
+Notes on triggers
+- Triggers provide DB-level guarantees but add hidden side effects; test thoroughly.
+- The migration file `002_triggers.sql` adds the column and the triggers.
