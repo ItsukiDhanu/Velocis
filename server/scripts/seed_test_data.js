@@ -1,5 +1,6 @@
 import "../src/env.js";
 import crypto from "crypto";
+import { fileURLToPath } from "url";
 import { pool, withTransaction } from "../src/db.js";
 
 function randInt(min, max) {
@@ -124,7 +125,9 @@ async function seed() {
   console.log("Seeding complete.");
 }
 
-if (require.main === module) {
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+
+if (isMain) {
   seed()
     .then(() => process.exit(0))
     .catch((err) => {
