@@ -1,0 +1,130 @@
+
+1) Authentication and user lookup
+- Load the signed-in user profile.
+  SELECT id, username, avatar_url, profile_url FROM users WHERE id = 1
+- Find an existing GitHub user.
+  SELECT id FROM users WHERE github_id = '123456789'
+- Create a new GitHub user.
+  INSERT INTO users (github_id, username, avatar_url, profile_url) VALUES ('123456789', 'RANDOM_BULLSHIT', 'https://example.com/avatar.png', 'https://github.com/RANDOM_BULLSHIT')
+- Update an existing GitHub user profile.
+  UPDATE users SET username = 'RANDOM_BULLSHIT', avatar_url = 'https://example.com/avatar.png', profile_url = 'https://github.com/RANDOM_BULLSHIT' WHERE id = 1
+
+2) Repository browsing and details
+- Load one repository and check ownership.
+  SELECT id, owner_id, name, description, visibility, created_at, (owner_id = 7) AS is_owner FROM repositories WHERE id = 42
+- Load a branch for a repository.
+  SELECT id, head_commit_id FROM branches WHERE id = 8 AND repo_id = 42
+- Load the commit ancestry graph for a repository.
+  SELECT cp.commit_id, cp.parent_commit_id FROM commit_parents cp JOIN commits c ON c.id = cp.commit_id WHERE c.repo_id = 42
+- List repositories owned by the current user.
+  SELECT r.id, r.name, r.description, r.visibility, r.created_at, (SELECT COUNT(*) FROM branches b WHERE b.repo_id = r.id) AS branch_count, (SELECT COUNT(*) FROM commits c WHERE c.repo_id = r.id) AS commit_count FROM repositories r WHERE r.owner_id = 7 ORDER BY r.created_at DESC
+- List public repositories.
+  SELECT r.id, r.name, r.description, r.visibility, r.created_at, u.username AS owner_username, (r.owner_id = 7) AS is_owner, (SELECT COUNT(*) FROM branches b WHERE b.repo_id = r.id) AS branch_count, (SELECT COUNT(*) FROM commits c WHERE c.repo_id = r.id) AS commit_count FROM repositories r JOIN users u ON u.id = r.owner_id WHERE r.visibility = 'public' ORDER BY r.created_at DESC
+- Create a new repository.
+  INSERT INTO repositories (owner_id, name, description, visibility) VALUES (7, 'demo-repo', 'Example repository', 'public')
+- Create the default main branch.
+  INSERT INTO branches (repo_id, name, is_default) VALUES (42, 'main', 1)
+
+3) Commit history and graph views
+- Load the commit history for a branch.
+  SELECT c.id, c.message, c.created_at, c.is_merge, u.username, u.avatar_url FROM commits c JOIN users u ON u.id = c.author_id WHERE c.repo_id = 42 AND c.id IN (10, 11, 12) ORDER BY c.created_at DESC, c.id DESC
+- Check that commits belong to the repository.
+  SELECT id FROM commits WHERE id IN (10, 11, 12) AND repo_id = 42
+- Load the full repository graph view.
+  SELECT c.id, c.repo_id, c.branch_id, c.author_id, c.message, c.created_at, c.is_merge, u.username AS author_username, u.avatar_url AS author_avatar FROM commits c JOIN users u ON u.id = c.author_id WHERE c.repo_id = 42 AND c.id IN (200, 199, 198) ORDER BY c.created_at DESC
+- List branches for a repository.
+  SELECT b.id, b.name, b.head_commit_id, b.is_default, b.created_at, c.message AS head_message, c.created_at AS head_created_at FROM branches b LEFT JOIN commits c ON c.id = b.head_commit_id WHERE b.repo_id = 42 ORDER BY b.is_default DESC, b.name ASC
+- Get all branch records for graph rendering.
+  SELECT id, name, head_commit_id, is_default FROM branches WHERE repo_id = 42 ORDER BY is_default DESC, name ASC
+
+4) Commit creation and branching
+- Create a new commit from staged files.
+  INSERT INTO commits (repo_id, branch_id, author_id, message, is_merge) VALUES (42, 8, 7, 'Initial commit', 0)
+- Link a commit to its parent commit.
+  INSERT INTO commit_parents (commit_id, parent_commit_id) VALUES (200, 199)
+- Insert or reuse a repository file record.
+  INSERT INTO repo_files (repo_id, path) VALUES (42, 'src/index.js') ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
+- Store commit file entries.
+  INSERT INTO commit_files (commit_id, file_id, blob_id, action) VALUES (200, 301, 5, 'modify')
+- Update the branch head after committing.
+  UPDATE branches SET head_commit_id = 200 WHERE id = 8
+- Create a merge commit.
+  INSERT INTO commits (repo_id, branch_id, author_id, message, is_merge) VALUES (1, 2, 3, 'Merge feature branch', 1)
+- Connect a merge commit to both parents.
+  INSERT INTO commit_parents (commit_id, parent_commit_id) VALUES (20, 19)
+- Record the merge in the merges table.
+  INSERT INTO merges (repo_id, source_branch_id, target_branch_id, merge_commit_id) VALUES (1, 4, 2, 20)
+- Create a new branch from a commit or branch head.
+  INSERT INTO branches (repo_id, name, head_commit_id) VALUES (42, 'feature-x', 200)
+- Resolve the source commit for a branch creation.
+  SELECT head_commit_id FROM branches WHERE id = 8 AND repo_id = 42
+- Resolve the default branch head for a repo.
+  SELECT head_commit_id FROM branches WHERE repo_id = 42 AND is_default = 1
+
+5) Rollback and branch reset
+- Move a branch head back to an older commit.
+  UPDATE branches SET head_commit_id = 20 WHERE id = 2
+- Record rollback history.
+  INSERT INTO rollback_logs (branch_id, from_commit_id, to_commit_id, actor_id, reason) VALUES (2, 20, 15, 3, 'Rollback to a known good commit')
+- Verify the rollback target belongs to the repository.
+  SELECT id FROM commits WHERE id = 20 AND repo_id = 42
+
+6) File staging and file history
+- Load staged files for a branch.
+  SELECT s.id, s.file_path, s.action, s.created_at, b.size_bytes, b.content_type FROM staging_files s JOIN file_blobs b ON b.id = s.blob_id WHERE s.repo_id = 42 AND s.branch_id = 8 ORDER BY s.created_at DESC
+- Reuse an existing file blob by hash.
+  SELECT id FROM file_blobs WHERE sha256 = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+- Store a new uploaded file blob.
+  INSERT INTO file_blobs (sha256, size_bytes, content_type, content) VALUES ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 128, 'text/plain', 'Hello world')
+- Detect whether a file already exists in the repository.
+  SELECT id FROM repo_files WHERE repo_id = 42 AND path = 'README.md'
+- Remove any old staged copy before restaging a file.
+  DELETE FROM staging_files WHERE repo_id = 42 AND branch_id = 8 AND file_path = 'README.md'
+- Add or replace a staged file for a branch.
+  INSERT INTO staging_files (repo_id, branch_id, uploader_id, file_path, blob_id, action) VALUES (42, 8, 7, 'README.md', 5, 'add')
+- Load a specific staged file entry.
+  SELECT id FROM staging_files WHERE id = 15 AND repo_id = 42
+- Delete one staged file entry.
+  DELETE FROM staging_files WHERE id = 15
+- Load staged files in commit order.
+  SELECT id, file_path, blob_id, action FROM staging_files WHERE repo_id = 42 AND branch_id = 8 ORDER BY created_at ASC
+- Clear all staged files after commit.
+  DELETE FROM staging_files WHERE repo_id = 42 AND branch_id = 8
+- Load the committed file history for a repository.
+  SELECT rf.id AS file_id, rf.path AS file_path, cf.action, c.id AS commit_id, c.message AS commit_message, c.created_at AS commit_created_at, u.username AS author_username, b.size_bytes FROM commits c JOIN commit_files cf ON cf.commit_id = c.id JOIN repo_files rf ON rf.id = cf.file_id JOIN file_blobs b ON b.id = cf.blob_id JOIN users u ON u.id = c.author_id WHERE c.repo_id = 42 AND c.id IN (101, 102, 103) ORDER BY c.created_at DESC, c.id DESC
+- Load the current file list for a repository branch.
+  SELECT rf.id AS file_id, rf.path AS file_path, cf.action, c.id AS commit_id, c.message AS commit_message, c.created_at AS commit_created_at, u.username AS author_username, b.size_bytes FROM commits c JOIN commit_files cf ON cf.commit_id = c.id JOIN repo_files rf ON rf.id = cf.file_id JOIN file_blobs b ON b.id = cf.blob_id JOIN users u ON u.id = c.author_id WHERE c.repo_id = 42 AND c.id IN (101, 102, 103) ORDER BY c.created_at DESC, c.id DESC
+
+7) Repository deletion
+- Delete a repository and let cascades clean up related data.
+  DELETE FROM repositories WHERE id = 42
+
+8) Schema and migrations
+- Define users.
+  CREATE TABLE users ( id INT AUTO_INCREMENT PRIMARY KEY, github_id VARCHAR(64) NOT NULL UNIQUE, username VARCHAR(255) NOT NULL, avatar_url VARCHAR(512), profile_url VARCHAR(512), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ) ENGINE=InnoDB;
+- Define repositories.
+  CREATE TABLE repositories ( id INT AUTO_INCREMENT PRIMARY KEY, owner_id INT NOT NULL, name VARCHAR(120) NOT NULL, description TEXT, visibility ENUM('public', 'private') DEFAULT 'public', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (owner_id, name), FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define branches.
+  CREATE TABLE branches ( id INT AUTO_INCREMENT PRIMARY KEY, repo_id INT NOT NULL, name VARCHAR(120) NOT NULL, head_commit_id INT NULL, is_default TINYINT(1) DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (repo_id, name), FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define commits.
+  CREATE TABLE commits ( id INT AUTO_INCREMENT PRIMARY KEY, repo_id INT NOT NULL, branch_id INT NOT NULL, author_id INT NOT NULL, message VARCHAR(500) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, is_merge TINYINT(1) DEFAULT 0, FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE, FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE, FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define commit parents.
+  CREATE TABLE commit_parents ( commit_id INT NOT NULL, parent_commit_id INT NOT NULL, PRIMARY KEY (commit_id, parent_commit_id), FOREIGN KEY (commit_id) REFERENCES commits(id) ON DELETE CASCADE, FOREIGN KEY (parent_commit_id) REFERENCES commits(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define merges.
+  CREATE TABLE merges ( id INT AUTO_INCREMENT PRIMARY KEY, repo_id INT NOT NULL, source_branch_id INT NOT NULL, target_branch_id INT NOT NULL, merge_commit_id INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE, FOREIGN KEY (source_branch_id) REFERENCES branches(id) ON DELETE CASCADE, FOREIGN KEY (target_branch_id) REFERENCES branches(id) ON DELETE CASCADE, FOREIGN KEY (merge_commit_id) REFERENCES commits(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define rollback logs.
+  CREATE TABLE rollback_logs ( id INT AUTO_INCREMENT PRIMARY KEY, branch_id INT NOT NULL, from_commit_id INT NULL, to_commit_id INT NULL, actor_id INT NOT NULL, reason VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE, FOREIGN KEY (from_commit_id) REFERENCES commits(id) ON DELETE SET NULL, FOREIGN KEY (to_commit_id) REFERENCES commits(id) ON DELETE SET NULL, FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Add the branch head foreign key.
+  ALTER TABLE branches ADD CONSTRAINT fk_branch_head_commit FOREIGN KEY (head_commit_id) REFERENCES commits(id) ON DELETE SET NULL;
+- Define file blobs.
+  CREATE TABLE file_blobs ( id INT AUTO_INCREMENT PRIMARY KEY, sha256 CHAR(64) NOT NULL, size_bytes INT NOT NULL, content_type VARCHAR(255), content LONGBLOB NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (sha256) ) ENGINE=InnoDB;
+- Define repository files.
+  CREATE TABLE repo_files ( id INT AUTO_INCREMENT PRIMARY KEY, repo_id INT NOT NULL, path VARCHAR(500) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (repo_id, path), FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define staged files.
+  CREATE TABLE staging_files ( id INT AUTO_INCREMENT PRIMARY KEY, repo_id INT NOT NULL, branch_id INT NOT NULL, uploader_id INT NOT NULL, file_path VARCHAR(500) NOT NULL, blob_id INT NOT NULL, action ENUM('add', 'modify', 'delete') DEFAULT 'add', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE, FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE, FOREIGN KEY (uploader_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (blob_id) REFERENCES file_blobs(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+- Define commit files.
+  CREATE TABLE commit_files ( commit_id INT NOT NULL, file_id INT NOT NULL, blob_id INT NOT NULL, action ENUM('add', 'modify', 'delete') DEFAULT 'add', PRIMARY KEY (commit_id, file_id), FOREIGN KEY (commit_id) REFERENCES commits(id) ON DELETE CASCADE, FOREIGN KEY (file_id) REFERENCES repo_files(id) ON DELETE CASCADE, FOREIGN KEY (blob_id) REFERENCES file_blobs(id) ON DELETE CASCADE ) ENGINE=InnoDB;
+
+Notes
+- The migration file repeats the file-storage schema from schema.sql.
+- This list is organized by feature/purpose, with the actual query text shown under each item.

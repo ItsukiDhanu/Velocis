@@ -92,8 +92,8 @@ router.get("/:branchId/commits", async (req, res, next) => {
     const [rows] = await pool.query(
       "SELECT c.id, c.message, c.created_at, c.is_merge, u.username, u.avatar_url " +
         "FROM commits c JOIN users u ON u.id = c.author_id " +
-        `WHERE c.branch_id = ? AND c.id IN (${placeholders}) ORDER BY c.created_at DESC, c.id DESC`,
-      [branchId, ...reachableCommitIds]
+        `WHERE c.repo_id = ? AND c.id IN (${placeholders}) ORDER BY c.created_at DESC, c.id DESC`,
+      [branch.repo_id, ...reachableCommitIds]
     );
 
     res.json({ commits: rows, branch });

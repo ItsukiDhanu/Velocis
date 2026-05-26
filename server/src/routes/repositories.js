@@ -205,9 +205,9 @@ router.get("/:repoId/files", async (req, res, next) => {
         "JOIN repo_files rf ON rf.id = cf.file_id " +
         "JOIN file_blobs b ON b.id = cf.blob_id " +
         "JOIN users u ON u.id = c.author_id " +
-        `WHERE c.repo_id = ? AND c.branch_id = ? AND c.id IN (${placeholders}) ` +
+        `WHERE c.repo_id = ? AND c.id IN (${placeholders}) ` +
         "ORDER BY c.created_at DESC, c.id DESC",
-      [repoId, branchId, ...reachableCommitIds]
+      [repoId, ...reachableCommitIds]
     );
 
     const latestByFile = new Map();
