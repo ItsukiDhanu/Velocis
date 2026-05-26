@@ -67,8 +67,8 @@ async function seed() {
             for (let c = 0; c < commitCount; c++) {
               const message = `Seed commit ${c + 1} on branch ${branchId}`;
               const [insertCommit] = await conn.query(
-                "INSERT INTO commits (repo_id, branch_id, author_id, message, is_merge) VALUES (?, ?, ?, ?, 0)",
-                [repoId, branchId, userId, message]
+                "INSERT INTO commits (branch_id, author_id, message, is_merge) VALUES (?, ?, ?, 0)",
+                [branchId, userId, message]
               );
               const newCommitId = insertCommit.insertId;
 

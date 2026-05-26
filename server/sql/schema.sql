@@ -31,13 +31,11 @@ CREATE TABLE branches (
 
 CREATE TABLE commits (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  repo_id INT NOT NULL,
   branch_id INT NOT NULL,
   author_id INT NOT NULL,
   message VARCHAR(500) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   is_merge TINYINT(1) DEFAULT 0,
-  FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE,
   FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
   FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -52,12 +50,10 @@ CREATE TABLE commit_parents (
 
 CREATE TABLE merges (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  repo_id INT NOT NULL,
   source_branch_id INT NOT NULL,
   target_branch_id INT NOT NULL,
   merge_commit_id INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE,
   FOREIGN KEY (source_branch_id) REFERENCES branches(id) ON DELETE CASCADE,
   FOREIGN KEY (target_branch_id) REFERENCES branches(id) ON DELETE CASCADE,
   FOREIGN KEY (merge_commit_id) REFERENCES commits(id) ON DELETE CASCADE
@@ -101,14 +97,12 @@ CREATE TABLE repo_files (
 
 CREATE TABLE staging_files (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  repo_id INT NOT NULL,
   branch_id INT NOT NULL,
   uploader_id INT NOT NULL,
   file_path VARCHAR(500) NOT NULL,
   blob_id INT NOT NULL,
   action ENUM('add', 'modify', 'delete') DEFAULT 'add',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE,
   FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
   FOREIGN KEY (uploader_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (blob_id) REFERENCES file_blobs(id) ON DELETE CASCADE

@@ -37,7 +37,8 @@ async function getReachableCommitIds(repoId, headCommitId) {
   const [parentRows] = await pool.query(
     "SELECT cp.commit_id, cp.parent_commit_id " +
       "FROM commit_parents cp JOIN commits c ON c.id = cp.commit_id " +
-      "WHERE c.repo_id = ?",
+      "JOIN branches b ON b.id = c.branch_id " +
+      "WHERE b.repo_id = ?",
     [repoId]
   );
 
@@ -92,7 +93,8 @@ router.get("/:branchId/commits", async (req, res, next) => {
     const [rows] = await pool.query(
       "SELECT c.id, c.message, c.created_at, c.is_merge, u.username, u.avatar_url " +
         "FROM commits c JOIN users u ON u.id = c.author_id " +
-        `WHERE c.repo_id = ? AND c.id IN (${placeholders}) ORDER BY c.created_at DESC, c.id DESC`,
+        "JOIN branches b ON b.id = c.branch_id " +
+        `WHERE b.repo_id = ? AND c.id IN (${placeholders}) ORDER BY c.created_at DESC, c.id DESC`,
       [branch.repo_id, ...reachableCommitIds]
     );
 
@@ -130,7 +132,7 @@ router.post("/:branchId/commits", async (req, res, next) => {
     if (parentCommitIds.length > 0) {
       const placeholders = parentCommitIds.map(() => "?").join(",");
       const [rows] = await pool.query(
-        `SELECT id FROM commits WHERE id IN (${placeholders}) AND repo_id = ?`,
+        `SELECT c.id FROM commits c JOIN branches b ON b.id = c.branch_id WHERE c.id IN (${placeholders}) AND b.repo_id = ?`,
         [...parentCommitIds, branch.repo_id]
       );
       if (rows.length !== parentCommitIds.length) {
@@ -140,8 +142,8 @@ router.post("/:branchId/commits", async (req, res, next) => {
 
     const commitId = await withTransaction(async (conn) => {
       const [insertCommit] = await conn.query(
-        "INSERT INTO commits (repo_id, branch_id, author_id, message, is_merge) VALUES (?, ?, ?, ?, ?)",
-        [branch.repo_id, branch.id, req.user.id, message, parentCommitIds.length > 1 ? 1 : 0]
+        "INSERT INTO commits (branch_id, author_id, message, is_merge) VALUES (?, ?, ?, ?)",
+        [branch.id, req.user.id, message, parentCommitIds.length > 1 ? 1 : 0]
       );
 
       const newCommitId = insertCommit.insertId;
@@ -247,7 +249,7 @@ router.post("/:branchId/rollback", async (req, res, next) => {
     }
 
     const [commitRows] = await pool.query(
-      "SELECT id FROM commits WHERE id = ? AND repo_id = ?",
+      "SELECT c.id FROM commits c JOIN branches b ON b.id = c.branch_id WHERE c.id = ? AND b.repo_id = ?",
       [targetCommitId, branch.repo_id]
     );
 

@@ -49,7 +49,8 @@ async function getReachableCommitIds(repoId, headCommitIds) {
   const [parentRows] = await pool.query(
     "SELECT cp.commit_id, cp.parent_commit_id " +
       "FROM commit_parents cp JOIN commits c ON c.id = cp.commit_id " +
-      "WHERE c.repo_id = ?",
+      "JOIN branches b ON b.id = c.branch_id " +
+      "WHERE b.repo_id = ?",
     [repoId]
   );
 
@@ -86,7 +87,7 @@ router.get("/", async (req, res, next) => {
     const [rows] = await pool.query(
       "SELECT r.id, r.name, r.description, r.visibility, r.created_at, " +
         "(SELECT COUNT(*) FROM branches b WHERE b.repo_id = r.id) AS branch_count, " +
-        "(SELECT COUNT(*) FROM commits c WHERE c.repo_id = r.id) AS commit_count " +
+        "(SELECT COUNT(*) FROM commits c JOIN branches b ON b.id = c.branch_id WHERE b.repo_id = r.id) AS commit_count " +
         "FROM repositories r WHERE r.owner_id = ? ORDER BY r.created_at DESC",
       [req.user.id]
     );
@@ -103,7 +104,7 @@ router.get("/public", async (req, res, next) => {
         "u.username AS owner_username, " +
         "(r.owner_id = ?) AS is_owner, " +
         "(SELECT COUNT(*) FROM branches b WHERE b.repo_id = r.id) AS branch_count, " +
-        "(SELECT COUNT(*) FROM commits c WHERE c.repo_id = r.id) AS commit_count " +
+        "(SELECT COUNT(*) FROM commits c JOIN branches b ON b.id = c.branch_id WHERE b.repo_id = r.id) AS commit_count " +
         "FROM repositories r JOIN users u ON u.id = r.owner_id " +
         "WHERE r.visibility = 'public' " +
         "ORDER BY r.created_at DESC",
@@ -201,11 +202,12 @@ router.get("/:repoId/files", async (req, res, next) => {
         "c.id AS commit_id, c.message AS commit_message, c.created_at AS commit_created_at, " +
         "u.username AS author_username, b.size_bytes " +
         "FROM commits c " +
+        "JOIN branches br ON br.id = c.branch_id " +
         "JOIN commit_files cf ON cf.commit_id = c.id " +
         "JOIN repo_files rf ON rf.id = cf.file_id " +
         "JOIN file_blobs b ON b.id = cf.blob_id " +
         "JOIN users u ON u.id = c.author_id " +
-        `WHERE c.repo_id = ? AND c.id IN (${placeholders}) ` +
+        `WHERE br.repo_id = ? AND c.id IN (${placeholders}) ` +
         "ORDER BY c.created_at DESC, c.id DESC",
       [repoId, ...reachableCommitIds]
     );
@@ -340,7 +342,7 @@ router.delete("/:repoId/staging/:stagingId", async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      "SELECT id FROM staging_files WHERE id = ? AND repo_id = ?",
+      "SELECT s.id FROM staging_files s JOIN branches b ON b.id = s.branch_id WHERE s.id = ? AND b.repo_id = ?",
       [stagingId, repoId]
     );
 
@@ -502,7 +504,7 @@ router.post("/:repoId/branches", async (req, res, next) => {
     let baseCommitId = null;
     if (fromCommitId) {
       const [commitRows] = await pool.query(
-        "SELECT id FROM commits WHERE id = ? AND repo_id = ?",
+        "SELECT c.id FROM commits c JOIN branches b ON b.id = c.branch_id WHERE c.id = ? AND b.repo_id = ?",
         [fromCommitId, repoId]
       );
       if (commitRows.length === 0) {
@@ -567,10 +569,11 @@ router.get("/:repoId/graph", async (req, res, next) => {
 
     const placeholders = reachableCommitIds.map(() => "?").join(",");
     const [commits] = await pool.query(
-      "SELECT c.id, c.repo_id, c.branch_id, c.author_id, c.message, c.created_at, c.is_merge, " +
+      "SELECT c.id, b.repo_id AS repo_id, c.branch_id, c.author_id, c.message, c.created_at, c.is_merge, " +
         "u.username AS author_username, u.avatar_url AS author_avatar " +
-        "FROM commits c JOIN users u ON u.id = c.author_id " +
-        `WHERE c.repo_id = ? AND c.id IN (${placeholders}) ORDER BY c.created_at DESC`,
+        "FROM commits c JOIN branches b ON b.id = c.branch_id " +
+        "JOIN users u ON u.id = c.author_id " +
+        `WHERE b.repo_id = ? AND c.id IN (${placeholders}) ORDER BY c.created_at DESC`,
       [repoId, ...reachableCommitIds]
     );
 
